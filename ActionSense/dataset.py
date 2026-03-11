@@ -1,8 +1,6 @@
 import h5py
-import numpy as np
 from collections import defaultdict
-                    
-import torch.nn as nn
+import numpy as np
 
 def load_and_restructure_hdf5_data(filepath):
     with h5py.File(filepath, 'r') as hdf_file:
@@ -20,11 +18,11 @@ def load_and_restructure_hdf5_data(filepath):
         for key in hdf_file.keys():
             if key.startswith("example_matrices_"):
                 device_stream = tuple(key.split("_")[2:])
-                mapped_key = key_map.get(device_stream, device_stream) 
+                mapped_key = key_map.get(device_stream, device_stream)  # Get the mapped key
                 example_matrices[mapped_key] = hdf_file[key][:]
         example_subject_ids = hdf_file['example_subject_ids'][:]
         client_data = {}
-        unique_client_ids = set(example_subject_ids)
+        unique_client_ids = set(example_subject_ids)  # Extract unique client IDs
         for client_id in unique_client_ids:
             client_id_str = client_id.decode('utf-8') if isinstance(client_id, bytes) else client_id
             client_data[client_id_str] = {}
@@ -45,8 +43,10 @@ def load_and_restructure_hdf5_data(filepath):
 def dirichlet_partition_data(client_data, alpha, group2_ids=['S06', 'S07', 'S08', 'S09'], seed=42):
     np.random.seed(seed)
     clients = list(client_data.keys())
-    group1_clients = [c for c in clients if c not in group2_ids]; group2_clients = [c for c in clients if c in group2_ids]
-    group1_data_by_label = defaultdict(list); group2_data_by_label = defaultdict(list)
+    group1_clients = [c for c in clients if c not in group2_ids]
+    group2_clients = [c for c in clients if c in group2_ids]
+    group1_data_by_label = defaultdict(list)
+    group2_data_by_label = defaultdict(list)
     
     for client_id, streams in client_data.items():
         ref_key = list(streams.keys())[0]
@@ -92,7 +92,7 @@ def dirichlet_partition_data(client_data, alpha, group2_ids=['S06', 'S07', 'S08'
     return new_client_data
 
 
-def split_client(client_data, train_ratio):
+def stratified_split_client_data(client_data, train_ratio=0.7):
     client_data_train = {}
     client_data_test = {}
     for client, modalities_data in client_data.items():
@@ -118,82 +118,3 @@ def split_client(client_data, train_ratio):
             client_data_train[client][device_stream] = (x_train, y_train)
             client_data_test[client][device_stream] = (x_test, y_test)
     return client_data_train, client_data_test
-
-
-def split_client_missing_modality(client_data, train_ratio, missing_modality_rate):
-    client_data_train = {}
-    client_data_test = {}
-    for client, modalities_data in client_data.items():
-        num_modalities = len(modalities_data)
-        num_to_remove = int(num_modalities * missing_modality_rate)
-        modalities_to_keep = list(modalities_data.keys())
-        np.random.shuffle(modalities_to_keep)
-        modalities_to_keep = modalities_to_keep[:max(2, num_modalities - num_to_remove)]
-        client_data_train[client] = {}
-        client_data_test[client] = {}
-        ref_modality = modalities_to_keep[0]
-        _, y = modalities_data[ref_modality]
-        unique_classes, class_indices, class_counts = np.unique(y, return_index=True, return_counts=True)
-        train_indices = []
-        test_indices = []
-        for cls, idx, count in zip(unique_classes, class_indices, class_counts):
-            all_indices = np.arange(idx, idx + count)
-            np.random.shuffle(all_indices)
-            boundary = int(count * train_ratio)
-            train_indices.extend(all_indices[:boundary])
-            test_indices.extend(all_indices[boundary:])
-        for device_stream in modalities_to_keep:
-            data = modalities_data[device_stream]
-            x = data[0]
-            x_train = [x[i] for i in train_indices]; y_train = [y[i] for i in train_indices]
-            x_test = [x[i] for i in test_indices]; y_test = [y[i] for i in test_indices]
-            client_data_train[client][device_stream] = (x_train, y_train)
-            client_data_test[client][device_stream] = (x_test, y_test)
-    return client_data_train, client_data_test
-
-
-
-class Eye_LSTM(nn.Module):
-    def __init__(self):
-        super(Eye_LSTM, self).__init__()
-        self.lstm = nn.LSTM(input_size=2, hidden_size=128, num_layers=1, batch_first=True)
-        self.fc = nn.Linear(128, 20)
-
-    def forward(self, x):
-        x, _ = self.lstm(x)
-        x = self.fc(x[:, -1, :])
-        return nn.LogSoftmax(dim=1)(x)
-
-class EMG_LSTM(nn.Module):
-    def __init__(self):
-        super(EMG_LSTM, self).__init__()
-        self.lstm = nn.LSTM(input_size=8, hidden_size=128, num_layers=1, batch_first=True)
-        self.fc = nn.Linear(128, 20)
-        
-    def forward(self, x):
-        x, _ = self.lstm(x)
-        x = self.fc(x[:, -1, :])
-        return nn.LogSoftmax(dim=1)(x)
-
-class Tactile_LSTM(nn.Module):
-    def __init__(self):
-        super(Tactile_LSTM, self).__init__()
-        self.lstm = nn.LSTM(input_size=32*32, hidden_size=128, num_layers=1, batch_first=True)
-        self.fc = nn.Linear(128, 20)
-
-    def forward(self, x):
-        x = x.view(x.size(0), x.size(1), -1)
-        x, _ = self.lstm(x)
-        x = self.fc(x[:, -1, :])
-        return nn.LogSoftmax(dim=1)(x)
-
-class IMU_LSTM(nn.Module):
-    def __init__(self):
-        super(IMU_LSTM, self).__init__()
-        self.lstm = nn.LSTM(input_size=22 * 3, hidden_size=128, num_layers=1, batch_first=True)
-        self.fc = nn.Linear(128, 20)
-    def forward(self, x):
-        x = x.view(x.size(0), x.size(1), -1)
-        x, _ = self.lstm(x)
-        x = self.fc(x[:, -1, :])
-        return nn.LogSoftmax(dim=1)(x)

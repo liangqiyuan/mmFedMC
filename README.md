@@ -7,7 +7,7 @@
 
 ## 🔥 Our Framework
 
-TL, DR: In this repo, we provide the implementation of **multimodal Federated learning with joint Modality and Client selection** (MFedMC), a novel methodology for multimodal federated learning.
+TL;DR: In this repo, we provide the implementation of **Multimodal Federated Learning with Joint Modality and Client Selection** (MFedMC), a novel methodology for multimodal federated learning that decouples traditional holistic fusion approaches into separate global modality encoders and local fusion modules.
 
 <div align="center">
     <img src="figures/MFedMC.png" alt="overview" style="width:60%;"/>
@@ -39,26 +39,29 @@ MFedMC/
 │   requirements.txt
 │
 ├─── ActionSense/
-│   └─── dataset/
-│       │   ActionSense_dataset.hdf5
 │   │   main.py
-│   │   utils_data.py
-│   │   utils_train.py
+│   │   dataset.py
+│   │   federated.py
+│   │   models.py
 │   │   options.py
+│   │   utils.py
 │
 │   # other datasets
 ```
 
-- **`ActionSense/`**: Code for the ActionSense dataset
-  - `main.py`: Main script for training and evaluating the MFedMC framework.
-  - `utils_data.py`: Data loading, preprocessing, and data partitioning utilities.
-  - `utils_train.py`: Functions related to model training.
-  - `options.py`: Configuration settings.
+- **`ActionSense/`**: Core modules for the ActionSense dataset framework. Note: different datasets might have different network architectures and data loaders, so they are separated by folder.
+  - `main.py`: Entry point for initializing data, generalized global modality encoders, and running the MFedMC federated learning loop.
+  - `dataset.py`: Data loading, restructuring, and partitioning utilities (e.g., Dirichlet, Stratified) to handle dataset and modality heterogeneities.
+  - `federated.py`: Core MFedMC algorithm, including local training of modality encoders, personalized local fusion module training, computation of Shapley values, and the joint modality and client selection strategies based on priority metrics.
+  - `models.py`: PyTorch neural network definitions for modality encoders (e.g., Eye, EMG, Tactile, IMU).
+  - `options.py`: Hyperparameters and configuration settings.
+  - `utils.py`: Helper functions for math, normalizations, and SHAP value aggregations.
 
 
 ## 🏃‍♂ Run Code
 
 Run our framework with the following command:
 ```bash
-python ActionSense/main.py
+cd ActionSense
+python main.py
 ```
